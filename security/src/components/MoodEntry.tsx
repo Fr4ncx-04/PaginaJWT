@@ -53,7 +53,7 @@ export const MoodEntry: React.FC = () => {
         setIsEditing(false);
 
         if (data.entry.photo_url) {
-          await loadPhoto(data.entry.photo_url); // ✅ Ahora es solo el nombre
+          await loadPhoto(data.entry.photo_url);
         } else {
           setPhotoUrl('');
         }
@@ -206,7 +206,7 @@ export const MoodEntry: React.FC = () => {
       setSelectedMoodId(parseInt(entry.mood, 10));
       setIsEditing(false);
       if (entry.photo_url) {
-        loadPhoto(entry.photo_url); // ✅ Ahora es solo el nombre
+        loadPhoto(entry.photo_url);
       }
     } else {
       setDescription('');

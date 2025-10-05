@@ -4,7 +4,6 @@ interface User {
   id: number;
   username: string;
   email: string;
-  // agrega otros campos según tu backend
 }
 
 interface AuthContextType {

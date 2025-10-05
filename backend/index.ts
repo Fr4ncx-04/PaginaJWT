@@ -23,7 +23,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Crear nueva entrada (máx 1 cada 30 seg)
+// Crear nueva entrada 
 export const createEntryLimiter = rateLimit({
   windowMs: 30 * 1000, // 30 segundos
   max: 1,
@@ -32,7 +32,7 @@ export const createEntryLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Editar entrada (máx 3 cada minuto)
+// Editar entrada 
 export const editEntryLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   max: 3,
@@ -41,7 +41,7 @@ export const editEntryLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Subir imágenes (máx 2 cada 15 seg)
+// Subir imágenes
 export const uploadLimiter = rateLimit({
   windowMs: 15 * 1000, // 15 segundos
   max: 2,
@@ -140,7 +140,7 @@ const LOCKOUT_TIME = 5 * 60 * 1000; // 5 minutos
 
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
-  const ip = getClientIp(req); // también puedes usar username como clave
+  const ip = getClientIp(req);
   const now = Date.now();
 
   if (!username || !password)
@@ -178,7 +178,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // login correcto → limpiar intentos
+    // login limpiar intentos
     delete loginAttempts[ip];
 
     const token = generateToken({ id: user.id, username: user.username });
@@ -204,7 +204,7 @@ function registerFailedAttempt(ip: string, now: number) {
 
 
 // Obtener usuario actual
-app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
+/*app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
   try {
     const [rows] = await db.execute(
       'SELECT id, email, username FROM users WHERE id = ?',
@@ -217,7 +217,7 @@ app.get('/api/auth/me', authenticateToken, async (req: any, res) => {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
-});
+});*/
 
 // --- RUTAS POSTS ---
 // Crear post
@@ -260,7 +260,7 @@ app.put('/api/mood-entry/:id', authenticateToken, editEntryLimiter, async (req: 
   console.log('Received data:', { postId, description, mood, photo_url });
 
   try {
-    // 1️⃣ Buscar post existente
+    // Buscar post existente
     const [rows] = await db.execute(
       'SELECT * FROM posts WHERE id=? AND user_id=?',
       [postId, req.user.id]
@@ -273,13 +273,13 @@ app.put('/api/mood-entry/:id', authenticateToken, editEntryLimiter, async (req: 
 
     console.log('Existing post:', post);
 
-    // 2️⃣ Sanitizar descripción
+    // Sanitizar descripción
     const sanitizedDesc = description?.replace(/</g, '&lt;').replace(/>/g, '&gt;') || post.description;
 
-    // 3️⃣ Determinar foto final
+    // Determinar foto final
     let finalPhoto = post.photo; // Mantener foto actual por defecto
 
-    // Si viene nueva foto (nombre del archivo), validar que exista
+    // Si viene nueva foto, validar que exista
     if (photo_url && photo_url !== post.photo) {
       const newPhotoPath = path.resolve(process.cwd(), 'storage/uploads', photo_url);
       
@@ -312,7 +312,7 @@ app.put('/api/mood-entry/:id', authenticateToken, editEntryLimiter, async (req: 
       postId: postId
     });
 
-    // 4️⃣ Actualizar post en BD
+    // Actualizar post en BD
     await db.execute(
       'UPDATE posts SET description=?, mood=?, photo=?, updated_at=NOW() WHERE id=?',
       [sanitizedDesc, mood, finalPhoto, postId]
@@ -320,14 +320,14 @@ app.put('/api/mood-entry/:id', authenticateToken, editEntryLimiter, async (req: 
 
     console.log('Database updated successfully');
 
-    // 5️⃣ Traer post actualizado
+    // Traer post actualizado
     const [updatedRows] = await db.execute(
       'SELECT id, user_id, description, mood, photo, created_at, updated_at FROM posts WHERE id=?',
       [postId]
     );
     const updatedPost = (updatedRows as any)[0];
     
-    // Solo devolver el nombre del archivo, no URL completa
+    // Solo devolver el nombre del archivo
     updatedPost.photo_url = updatedPost.photo || null;
 
     console.log('Returning updated post:', updatedPost);
@@ -356,7 +356,7 @@ app.get('/api/mood-entry/user', authenticateToken, async (req: any, res) => {
   }
 });
 
-// --- Upload seguro mejorado ---
+// --- Upload seguro ---
 app.post(
   '/api/mood-entry/upload',
   authenticateToken,
@@ -368,7 +368,7 @@ app.post(
 
       const tempPath = req.file.path;
 
-      // ✅ Detectar tipo real con file-type
+      // Detectar tipo real con file-type
       const detected = await fileType.fromFile(tempPath);
       const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
       if (!detected || !allowedMimes.includes(detected.mime)) {
@@ -376,7 +376,7 @@ app.post(
         return res.status(400).json({ message: 'Invalid file type' });
       }
 
-      // ✅ Validar que no esté corrupta con sharp
+      // Validar que no esté corrupta con sharp
       try {
         await sharp(tempPath).metadata();
       } catch (err) {
@@ -384,18 +384,18 @@ app.post(
         return res.status(400).json({ message: 'Corrupted or invalid image' });
       }
 
-      // ✅ Guardar nueva foto con nombre seguro
+      // Guardar nueva foto con nombre seguro
       const ext = '.' + detected.ext;
       const filename = `${req.user.id}_${crypto.randomUUID()}${ext}`;
       const uploadDir = path.resolve(process.cwd(), 'storage/uploads');
       if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
       const finalPath = path.join(uploadDir, filename);
 
-      // ⚡ Copiar + borrar archivo temporal (evita EBUSY)
+      // Copiar + borrar archivo temporal
       await fs.promises.copyFile(tempPath, finalPath);
       await fs.promises.unlink(tempPath);
 
-      // ✅ Actualizar la BD con la nueva foto
+      // Actualizar la BD con la nueva foto
       const [rows] = await db.execute(
         'SELECT photo FROM posts WHERE user_id=? ORDER BY created_at DESC LIMIT 1',
         [req.user.id]
@@ -403,13 +403,13 @@ app.post(
       const lastPhoto = (rows as any)[0]?.photo;
 
       try {
-        // Actualizamos la BD en la entrada más reciente (o creas una nueva según tu lógica)
+        // Actualizamos la BD en la entrada más reciente
         await db.execute(
           'UPDATE posts SET photo=? WHERE user_id=? ORDER BY created_at DESC LIMIT 1',
           [filename, req.user.id]
         );
 
-        // ✅ Solo después de actualizar la BD borramos la foto anterior
+        //Solo después de actualizar la BD borramos la foto anterior
         if (lastPhoto) {
           const oldPath = path.resolve(uploadDir, lastPhoto);
           if (fs.existsSync(oldPath)) {
@@ -418,7 +418,7 @@ app.post(
         }
       } catch (dbErr) {
         console.error('Error updating DB, keeping old photo:', dbErr);
-        // Opcional: borrar la nueva foto si no quieres dejar archivos huérfanos
+        // Borrar la nueva foto para no dejar archivos huérfanos
         await fs.promises.unlink(finalPath);
         return res.status(500).json({ message: 'Failed to save photo' });
       }
@@ -472,7 +472,7 @@ app.get('/uploads/:filename', authenticateToken, (req: any, res) => {
 });
 
 // Dar like a un post
-app.post(
+/*app.post(
   '/api/mood-entry/:id/like',
   authenticateToken,
   async (req: any, res) => {
@@ -508,9 +508,9 @@ app.post(
       res.status(500).json({ message: 'Server error' });
     }
   }
-);
+);*/
 
-app.get('/api/mood-entry/all', authenticateToken, async (req: any, res) => {
+/*app.get('/api/mood-entry/all', authenticateToken, async (req: any, res) => {
   try {
     const moodFilter = req.query.mood ? 'WHERE mood=?' : '';
     const params = req.query.mood ? [req.query.mood] : [];
@@ -540,7 +540,7 @@ app.get('/api/mood-entry/all', authenticateToken, async (req: any, res) => {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
-});
+});*/
 
 // --- INICIAR SERVIDOR ---
 const PORT = process.env.PORT || 4000;
